@@ -1,7 +1,12 @@
 import java.lang.Exception
 
 fun main() {
-    part2()
+//    part2()
+
+    val s = parseString2(DataReader.readWhole(4))
+    s.forEach {
+        println(it)
+    }
 }
 
 private fun part1() {
@@ -21,7 +26,6 @@ val containsRequired: (IdentityCard) -> Boolean = {
 }
 
 private fun part2() {
-    println("Reaches here")
     val criterias = mapOf<String, (String) -> Boolean>(
         "byr" to { (1920 until 2002).contains(it.toInt()) },
         "iyr" to { (2010 until 2020).contains(it.toInt()) },
@@ -99,6 +103,45 @@ fun parseString(value: String): List<IdentityCard> {
     }
     
     return elements
+}
+
+fun parseString2(value: String): Sequence<IdentityCard> {
+    val regex = (
+        "(pid:[^\\s]*)|" +
+        "(byr:[^\\s]*)|" +
+        "(iyr:[^\\s]*)|" +
+        "(eyr:[^\\s]*)|" +
+        "(hgt:[^\\s]*)|" +
+        "(hcl:[^\\s]*)|" +
+        "(ecl:[^\\s]*)|" +
+        "(cid:[^\\s]*)|" +
+        "(\n(?=\n))"
+        ).toRegex()
+    
+    val all = regex.findAll(value)
+    
+    var current = emptyIdCard()
+    
+    return sequence {
+        all.forEach {
+            val matched = it.groupValues
+        
+            for (i in 1 .. 8) {
+                if (matched[i].length > 4) {
+                    current[matched[i].substring(0, 3)] = matched[i].substring(4)
+                }
+            }
+        
+            if (matched[9] != EMPTY) {
+                yield(current)
+                current = emptyIdCard()
+            }
+        }
+    
+        if (current.isNotEmpty()) {
+            yield(current)
+        }
+    }
 }
 
 typealias IdentityCard = Map<String, String>
