@@ -1,4 +1,7 @@
 object DataReader {
+    fun read(name: String) = javaClass.classLoader.getResource("inputs/$name.txt")
+        .readText().lines()
+    
     fun read(dayNr: Int) = readWhole(dayNr)
         .lines()
     
