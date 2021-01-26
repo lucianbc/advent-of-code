@@ -22,7 +22,7 @@ object Day22 {
         private val count = gameCounter++
         private var roundCounter = 1
         
-        private val previousRounds = mutableListOf<Pair<List<Int>, List<Int>>>()
+        private val previousRounds = mutableListOf<String>()
         
         enum class Winner { P1, P2 }
         
@@ -51,7 +51,7 @@ object Day22 {
             var player2 = _player2
             
             while (player1.isNotEmpty() && player2.isNotEmpty()) {
-                val roundWinner = playRound(player1, player2)
+                val roundWinner = playRound(player1, player2) ?: return Winner.P1 to player1
                 val np1 =
                     if (roundWinner == Winner.P1) player1.drop(1).plus(listOf(player1.first(), player2.first()))
                     else player1.drop(1)
@@ -64,14 +64,25 @@ object Day22 {
             return if (player1.isEmpty()) Winner.P2 to player2 else Winner.P1 to player1
         }
         
-        fun playRound(player1: List<Int>, player2: List<Int>): Winner {
+        fun validateState(player1: List<Int>, player2: List<Int>): Boolean {
+            val state = hashState(player1, player2)
+            return if (previousRounds.contains(state))
+                true
+            else {
+                previousRounds.add(state)
+                false
+            }
+        }
+        
+        fun playRound(player1: List<Int>, player2: List<Int>): Winner? {
             println("-- Round ${roundCounter++} (Game ${count}) --")
             println("Player 1's deck: $player1")
             println("Player 2's deck: $player2")
-            val f = previousRounds.find { it == player1 to player2 }
-            if (f != null)
-                return Winner.P1
-            previousRounds.add(player1 to player2)
+            
+            val state = hashState(player1, player2)
+            if (previousRounds.contains(state))
+                return null
+            previousRounds.add(state)
             
             val p1 = player1.first()
             val p2 = player2.first()
@@ -86,6 +97,10 @@ object Day22 {
                 if (p1 > p2) Winner.P1
                 else Winner.P2
             }
+        }
+        
+        private fun hashState(player1: List<Int>, player2: List<Int>): String {
+            return "${player1}-${player2}"
         }
     }
     
