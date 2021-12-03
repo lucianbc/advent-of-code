@@ -1,2 +1,2 @@
 language = "haskell"
-run = ["runhaskell", "2021/Day2/Main.hs"]
+run = ["runhaskell", "2021/Day3/Main.hs"]
