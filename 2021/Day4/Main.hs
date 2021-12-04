@@ -2,60 +2,39 @@ import qualified Data.Text as T
 
 main = part2
 
-runAllBingo :: [Int] -> [Table] -> Maybe WinnerCombo -> Maybe WinnerCombo
-runAllBingo [] _ prevWinner = prevWinner
-runAllBingo (crtNum:rest) tables prevWinner =
-  let markedTables = map (mark crtNum) tables
-      (winnerIndex, possibleWinner) = findWinner markedTables
-      (nextWinner, nextTables) = 
-        case possibleWinner of 
-          Just winner -> (Just (winner, crtNum), removeAt winnerIndex markedTables)
-          Nothing -> (prevWinner, markedTables)
-  in runAllBingo rest nextTables nextWinner
-
-
-part2 = do
-  lines <- readLines "2021/Day4/input.txt"
-  let numbers = parseNumbers $ head lines
-  let tables = parseTables $ (tail $ tail lines)
-  let result = runAllBingo numbers tables Nothing
-  _ <- print result
-  let score = case result of
-                Just (winner, lastNum) -> computeScore lastNum winner   
-                Nothing -> -1
-  print score
-
-showTables :: [Table] -> [[Int]]
-showTables tables = 
-  let showTable table = map (\x -> fst x) (head table)
-  in  map showTable tables
-
-part1 = do
-  lines <- readLines "2021/Day4/example.txt"
-  let numbers = parseNumbers $ head lines
-  let tables = parseTables $ (tail $ tail lines)
-  let (winner, lastNum) = runBingo numbers tables
-  _ <- print winner
-  _ <- print lastNum
-  _ <- print $ computeScore lastNum winner
-  return ()
-
 type TableCell = (Int, Bool)
 type Table = [[TableCell]]
 type WinnerCombo = (Table, Int)
 
-removeAt :: Int -> [a] -> [a]
-removeAt pos elems = removeCount 0 pos elems
-  where removeCount :: Int -> Int -> [a] -> [a]
-        removeCount _ _ [] = []
-        removeCount ct pos (x:xs) = if (ct == pos) then xs else x:(removeCount (ct + 1) pos xs)
+part2 = do
+  (numbers, tables) <- readInput
+  let allCombos = runBingo numbers tables
+  let result = last allCombos
+  let (winner, lastNum) = result
+  let score = computeScore lastNum winner
+  print score
 
-runBingo :: [Int] -> [Table] -> (Table, Int)
+part1 = do
+  (numbers, tables) <- readInput
+  let (winner, lastNum) = head $ runBingo numbers tables
+  let score = computeScore lastNum winner
+  print score
+
+runBingo :: [Int] -> [Table] -> [WinnerCombo]
+runBingo [] _ = []
+runBingo _ [] = []
 runBingo (crtNum:rest) tables = 
-  let markedTables = map (mark crtNum) tables  
-      (_, possibleWinner) = findWinner markedTables
-  in  case possibleWinner of Just winner -> (winner, crtNum)
-                             Nothing -> runBingo rest markedTables
+  let marked = map (mark crtNum) tables
+      (winners, loosers) = splitWinners marked
+      winnersCombo = map (\x -> (x, crtNum)) winners
+  in  winnersCombo <> (runBingo rest loosers)
+
+splitWinners :: [Table] -> ([Table], [Table])
+splitWinners [] = ([], [])
+splitWinners (t:tables) = 
+  let (winners, loosers) = splitWinners tables
+      isCrtWinner = isWinner t
+  in  if isCrtWinner then (t:winners, loosers) else (winners, t:loosers)
 
 computeScore :: Int -> Table -> Int
 computeScore lastNum table = 
@@ -64,35 +43,14 @@ computeScore lastNum table =
       sumOfMarked = foldl addToSum 0 allNums
   in lastNum * sumOfMarked
 
-findWinner :: [Table] -> (Int, Maybe Table)
-findWinner tables = 
-  let findWinnerRec :: [Table] -> Int -> (Int, Maybe Table)
-      findWinnerRec [] ct = (-1, Nothing)
-      findWinnerRec (crt:rest) ct = if (isWinner crt) then (ct, Just crt) else findWinnerRec rest (ct + 1)
-  in  findWinnerRec tables 0
-
-findWinners :: [Table] -> [(Int, Table)]
-findWinners tables = 
-  let findWinnerRec :: [Table] -> Int -> [(Int, Table)]
-      findWinnerRec [] ct = []
-      findWinnerRec (crt:rest) ct = 
-        let restW = findWinnerRec rest (ct + 1)
-        in  if (isWinner crt) then (ct, crt):restW else restW
-  in  findWinnerRec tables 0
-
 isWinner :: Table -> Bool
 isWinner table = 
-  let checkForAnyMarked = 
+  let isAllMarked = foldl (\acc (_, crt) -> acc && crt) True
+      checkForAnyMarked = 
         foldl (\acc crt -> acc || isAllMarked crt) False
       hasAnyNegativeRow = checkForAnyMarked table
       hasAnyNegativeCol = checkForAnyMarked $ transpose table
   in  hasAnyNegativeRow || hasAnyNegativeCol
-
-isAllMarked :: [TableCell] -> Bool
-isAllMarked = foldl (\acc (_, crt) -> acc && crt) True
-
-isAllNegative :: [Int] -> Bool
-isAllNegative elems = foldl (\acc crt -> acc && (crt < 0)) True elems
 
 transpose :: Table -> Table
 transpose table = 
@@ -102,14 +60,21 @@ transpose table =
         then []
         else heads:(transpose tails)
 
+mark :: Int -> Table -> Table
+mark value = map (markOnLine value)
+
 markOnLine :: Int -> [TableCell] -> [TableCell]
 markOnLine toMark elems = do
   crt <- elems
   let crtVal = fst crt
   return $ if (crtVal == toMark) then (crtVal, True) else crt
 
-mark :: Int -> Table -> Table
-mark value table = map (markOnLine value) table
+readInput :: IO ([Int], [Table])
+readInput = do
+  lines <- readLines "2021/Day4/input.txt"
+  let numbers = parseNumbers $ head lines
+  let tables = parseTables $ (tail $ tail lines)
+  return (numbers, tables)
 
 parseTables :: [String] -> [Table]
 parseTables [] = [[]]
@@ -133,7 +98,3 @@ toInt = read
 
 readLines :: FilePath -> IO [String]
 readLines = fmap lines <$> readFile
-
-
--- has a bug - if 0 is in the winning combination, it does not work
--- fixed with the pair with boolean
