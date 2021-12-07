@@ -3,7 +3,50 @@ import qualified Data.Text as T
 import Data.Map (Map)
 import qualified Data.Map as M
 
-main = solveForDays 256
+import Control.Monad.State.Lazy
+
+--doStuff :: Int -> State Memo Integer
+--doStuff days = do
+--  memo <- get
+
+--s1 = do
+--  put 3
+--  return 'X'
+
+--s2 = do
+--  put 4
+--  return 'Y'
+
+--sc = do
+--  a <- s1
+--  b <- s2
+--  return [a,b]
+
+main = do
+  _ <- print $ fst $ runState (fishCountState 1 80) M.empty
+  _ <- print $ snd $ fishCountMemo M.empty 1 80
+  return ()
+
+fishCountState :: Int -> Int -> State Memo Integer
+fishCountState internalClock daysRemaining = do
+  memo <- get
+  let key = (internalClock, daysRemaining)
+  let maybeResult = M.lookup key memo
+  case maybeResult of
+    Just count -> return count
+    Nothing
+      | daysRemaining <= 0 -> do
+          put $ M.insert key 1 memo
+          return 1
+      | internalClock == 0 -> do
+          sum1 <- fishCountState 6 (daysRemaining - 1)
+          sum2 <- fishCountState 8 (daysRemaining - 1)
+          let s = sum1 + sum2
+          put $ M.insert key s memo
+          return s
+      | otherwise -> fishCountState 0 (daysRemaining - internalClock)
+
+--main = solveForDays 256
 
 solveForDays days = do
   input <- parseInput
