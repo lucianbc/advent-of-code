@@ -1,50 +1,46 @@
 import qualified Data.Text as T
 
 main = part1
+ 
+part2 = do
+  nums <- parseNums
+  let minCost = findMinCost nums cost2
+  _ <- print minCost
+  return ()
 
 part1 = do
-  lines <- readLines "2021/Day7/example.txt"
-  let line = head lines
-  let nums = map toInt $ splitOn "," line
-  --let distances = findDistances nums
-  --let minDistance = findMinDistance distances
-  let minDistance = findDistanceEq nums
-  print minDistance
-  
-findDistanceEq :: [Int] -> (Int, Int)
-findDistanceEq p =
-  let sp = fromIntegral $ sum p
-      n = fromIntegral $ length p
-      x = sp / n
-      f = \x -> sum $ map (\pi -> abs $ pi - x) p
-      variants = [floor x, ceiling x]
-      [a, b] = map (computeDistance p) variants
-  in  (a, b)
+  nums <- parseNums
+  let minCost = findMinCost nums cost
+  _ <- print minCost
+  return ()
 
+findMinCost :: [Int] -> ([Int] -> Int -> Int) -> Int
+findMinCost nums costFn =
+  let (min, max) = minMax nums
+      costs = map (costFn nums) [min..max]
+      (minCost, _) = minMax costs
+  in  minCost
 
-findMinDistance :: [(Int, Int)] -> (Int, Int)
-findMinDistance dists = 
-  foldl 
-    (\acc crt -> if (snd acc < snd crt) then acc else crt)
-    (head dists)
-    dists
+cost :: [Int] -> Int -> Int
+cost nums x = sum $ map (\p -> abs $ x - p) nums
 
-findDistances :: [Int] -> [(Int, Int)]
-findDistances nums =
-  let (a, b) = minMax nums
-      range = [a..b]
-      result = map (\x -> (x, computeDistance nums x)) range
-  in  result  
+cost2 :: [Int] -> Int -> Int
+cost2 nums x = 
+  let fuelDistance a b = 
+        let n = abs $ a - b
+        in  n * (n + 1) `div` 2
+  in  sum $ map (fuelDistance x) nums
 
-computeDistance :: [Int] -> Int -> Int
-computeDistance nums reference =
-  foldl (\acc crt -> abs (reference - crt) + acc) 0 nums
-
-minMax ::[Int] -> (Int, Int)
+minMax :: [Int] -> (Int, Int)
 minMax (a:[]) = (a, a)
 minMax (x:rest) = 
   let (min1, max1) = minMax rest
   in  (min min1 x, max max1 x)
+
+parseNums = do
+  lines <- readLines "input.txt"
+  let line = head lines
+  return $ map toInt $ splitOn "," line
 
 splitOn :: String -> String -> [String]
 splitOn delim = map T.unpack . T.splitOn (T.pack delim) . T.pack
