@@ -15,7 +15,37 @@ main = do
   print $ S.size enabled
   return ()
 
+type Segment = (Int, Int)
+data Point3 = Point3 {
+  x :: Int,
+  y :: Int,
+  z :: Int
+} deriving (Show)
+type Cuboid = (Point3, Point3)
 
+class Range a where
+  intersect :: a -> a -> Maybe a
+  area :: a -> Int
+
+-- a1        a2   b1          b2 -> no intersect
+
+-- b1      b2  a1     a2       --> no intersect 
+
+-- b1       a1  b2       a2
+
+-- a1        b1     a2         b2
+instance Range (Int, Int) where
+  intersect (a1, a2) (b1, b2)
+    | b1 > a2 || a1 > b2 = Nothing
+    | otherwise          = Just (max a1 b1, min a2 b2)
+  area (a1, a2) = a2 - a1 + 1
+
+instance Range Cuboid where
+  intersect (a, b) = do
+    (x1, x2) <- intersect (x a, x b)
+    (y1, y2) <- intersect (y a, y b)
+    (z1, z2) <- intersect (z a, z b)
+    return $ (Point3 x1 y1 z1, Point3 x2 y2 z2)
 
 data Command = On {
   x :: (Int, Int),
