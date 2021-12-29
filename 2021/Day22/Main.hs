@@ -30,9 +30,11 @@ allLines :: Show a => [a] -> String
 allLines xs = L.intercalate "\n" (map show xs)
 
 part2 = do
-  lines <- readLines "input.txt"
+  lines <- readLines "example.txt"
   let commands = map parseLine lines
+  print $ computeV1 commands
   print $ computeV2 commands
+  putStrLn . allLines $ foldl composeAllCommands [] commands
   return ()
 
 allVolume :: [Command] -> Int
