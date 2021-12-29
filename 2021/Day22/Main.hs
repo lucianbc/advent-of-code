@@ -1,13 +1,18 @@
+{-# LANGUAGE FlexibleInstances #-}
+
 import qualified Data.Text as T
 
 import Data.Map (Map)
 import Data.Set (Set)
 
+import Data.Maybe (maybeToList)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.List as L
 
-main = do
+main = part2
+
+part1 = do
   lines <- readLines "input.txt"
   let commands = map parseLine lines
   -- print commands
@@ -15,11 +20,79 @@ main = do
   print $ S.size enabled
   return ()
 
+computeV1 :: [Command] -> Int
+computeV1 cs = S.size $ applyCommands cs
+
+computeV2 :: [Command] -> Int
+computeV2 cs = allVolume $ foldl composeAllCommands [] cs
+
+allLines :: Show a => [a] -> String
+allLines xs = L.intercalate "\n" (map show xs)
+
+part2 = do
+  lines <- readLines "input.txt"
+  let commands = map parseLine lines
+  print $ computeV2 commands
+  return ()
+
+allVolume :: [Command] -> Int
+allVolume = foldl (\acc crt -> acc + (if stateOf crt == On then volume (areaOf crt) else (- volume (areaOf crt)))) 0 
+
+volume :: Cuboid -> Int
+volume c = len (x c) * len (y c) * len (z c)
+
+len :: (Int, Int) -> Int
+len (a, b) = abs (b - a) + 1
+
+composeAllCommands :: [Command] -> Command -> [Command]
+composeAllCommands cs crt = 
+  let removeCommands = do
+        a <- cs
+        composeCommands a crt
+      last = [crt | stateOf crt == On]
+  in  cs <> removeCommands <> last
+
+composeCommands :: Command -> Command -> [Command]
+composeCommands c1 c2 = 
+  let intersection = intersect (areaOf c1) (areaOf c2)
+      rstate | stateOf c1 == On && stateOf c2 == On = [Off]
+             | stateOf c1 == Off && stateOf c2 == On = [On]
+             | stateOf c1 == On && stateOf c2 == Off = [Off]
+             | stateOf c1 == Off && stateOf c2 == Off = [On]
+      x = maybeToList intersection
+      r = do
+            s <- rstate
+            a <- x
+            return (Command s a)
+  in  r
+     
+class HyperSegment a where
+  intersect :: a -> a -> Maybe a
+
+-- a  b  c  d
+-- c  d  a  b
+-- a  c  b  d
+-- a  c  d  b
+-- c  a  d  b
+-- c  a  b  d
+instance HyperSegment (Int, Int) where
+  intersect (a, b) (c, d) = 
+    if a > d || b < c 
+      then Nothing
+      else Just (max a c, min b d)
+
+instance HyperSegment Cuboid where
+  intersect c1 c2 = do
+    xi <- x c1 `intersect` x c2
+    yi <- y c1 `intersect` y c2
+    zi <- z c1 `intersect` z c2
+    return $ Cuboid xi yi zi
+
 cropSpace :: [Command] -> [Command]
 cropSpace [] = []
 cropSpace ((Command state (Cuboid q w e)):rest) = 
   let c = Command state (Cuboid (cropInterval q) (cropInterval w) (cropInterval e))
-  in  c:(cropSpace rest)
+  in  c : cropSpace rest
 
 cropInterval :: (Int, Int) -> (Int, Int)
 cropInterval (a, b) = (max (-50) a, min 50 b)
@@ -30,9 +103,15 @@ data Cuboid = Cuboid {
   z :: (Int, Int)
 } deriving (Show)
 
-data State = On | Off deriving (Show)
+data State = On | Off deriving (Show, Eq)
 
 data Command = Command State Cuboid deriving (Show)
+
+stateOf :: Command -> State
+stateOf (Command s _) = s
+
+areaOf :: Command -> Cuboid
+areaOf (Command _ c) = c
 
 applyCommands :: [Command] -> Set (Int, Int, Int)
 applyCommands = foldl handleCommand S.empty
