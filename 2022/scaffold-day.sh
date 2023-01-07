@@ -21,13 +21,13 @@ fun main() {
 
 object Day$1 {
   fun part1() {
-    val result = DataReader.read($1)
-    println("Result is \$result")
+    val input = DataReader.read($1)
+    // println("Result is \$result")
   }
 
   fun part2() {
-    val result = DataReader.read($1)
-    println("Result is \$result")
+    val input = DataReader.read($1)
+    // println("Result is \$result")
   }
 }
 END
