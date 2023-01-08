@@ -21,3 +21,30 @@ fun List<String>.groupWithSeparator(separator: String): List<List<String>> {
   }
   return result
 }
+
+fun List<String>.read2dMap(): Array<CharArray> {
+  return this.map { it.toCharArray() }.toTypedArray()
+}
+
+fun Array<CharArray>.find(char: Char): Pair<Int, Int> {
+  this.indices.forEach { line ->
+    this[line].indices.forEach { col ->
+      if (this[line][col] == char) {
+        return line to col
+      }
+    }
+  }
+  return -1 to -1
+}
+
+fun Array<CharArray>.findAll(char: Char): Sequence<Pair<Int, Int>> {
+  return sequence {
+    indices.forEach { line ->
+      this@findAll[line].indices.forEach { col ->
+        if (this@findAll[line][col] == char) {
+          yield(line to col)
+        }
+      }
+    }
+  }
+}
