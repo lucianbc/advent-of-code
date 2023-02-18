@@ -1,3 +1,8 @@
+fun Regex.extractGroupsFromString(inputString: String): MatchResult {
+  return matchEntire(inputString)
+    .apply { require(this != null) { "Input $inputString does not match the expected regex" } }!!
+}
+
 fun Array<Array<Char>>.join(): String {
   return this.joinToString("\n") { it.joinToString("") }
 }
