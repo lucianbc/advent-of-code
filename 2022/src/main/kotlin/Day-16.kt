@@ -38,39 +38,60 @@ object Day16 {
     data class MemoKey(
       val nodeKey: String,
       val timeLeft: Int,
+      val openedSoFar: Set<String>,
     )
 
     private val memo2 = mutableMapOf<MemoKey, Int>()
 
-    fun maxScore2(nodeKey: String, timeLeft: Int, openedSoFar: List<String>, pathSoFar: List<String>): Int {
-      println("Computing $nodeKey $timeLeft $openedSoFar $pathSoFar")
+
+    private var stepCount = 0
+    fun maxScore2(nodeKey: String, timeLeft: Int, openedSoFar: Set<String>, pathSoFar: Set<String>): Int {
+      println("Computing ${stepCount++} $nodeKey $timeLeft $openedSoFar $pathSoFar")
       val memoKey = MemoKey(
         nodeKey,
         timeLeft,
+        openedSoFar,
       )
 
       if (memo2.containsKey(memoKey)) {
         return memo2[memoKey]!!
       }
 
-      val result = if (timeLeft <= 1) {
-        0
-      } else {
-        val node = nodes[nodeKey]!!
-
-        val nodeFlow = (timeLeft - 1) * node.flow
-
-        val maxWithoutOpeningThis = node.links
-          .filter { pathSoFar.contains(it).not() }
-          .maxOfOrNull { maxScore2(it, timeLeft - 1, openedSoFar, pathSoFar + listOf(nodeKey)) } ?: if (openedSoFar.contains(nodeKey)) 0 else nodeFlow
-
-        if (openedSoFar.contains(node.name)) {
-          maxWithoutOpeningThis
-        } else {
-          val maxWithOpeningThis = node.links.map { maxScore2(it, timeLeft - 2, openedSoFar + listOf(nodeKey), emptyList()) }.max() + nodeFlow
-          max(maxWithoutOpeningThis, maxWithOpeningThis)
-        }
+      if (timeLeft == 0) {
+        return 0
       }
+
+      var result = 0
+
+      val node = nodes[nodeKey]!!
+
+      if (openedSoFar.contains(nodeKey).not() && node.flow != 0) {
+        result = max(result, (timeLeft - 1) * node.flow + maxScore2(nodeKey, timeLeft - 1, openedSoFar + setOf(nodeKey), pathSoFar))
+      }
+
+      node.links.forEach { link ->
+        result = max(result, maxScore2(link, timeLeft - 1, openedSoFar, pathSoFar + setOf(link)))
+      }
+
+
+//      val result = if (timeLeft <= 1) {
+//        0
+//      } else {
+//        val node = nodes[nodeKey]!!
+//
+//        val nodeFlow = (timeLeft - 1) * node.flow
+//
+//        val maxWithoutOpeningThis = node.links
+//          .filter { pathSoFar.contains(it).not() }
+//          .maxOfOrNull { maxScore2(it, timeLeft - 1, openedSoFar, pathSoFar + setOf(nodeKey)) } ?: if (openedSoFar.contains(nodeKey)) 0 else nodeFlow
+//
+//        if (openedSoFar.contains(node.name) || node.flow == 0) {
+//          maxWithoutOpeningThis
+//        } else {
+//          val maxWithOpeningThis = node.links.map { maxScore2(it, timeLeft - 2, openedSoFar + listOf(nodeKey), emptySet()) }.max() + nodeFlow
+//          max(maxWithoutOpeningThis, maxWithOpeningThis)
+//        }
+//      }
       memo2[memoKey] = result
       return result
     }
@@ -115,7 +136,7 @@ object Day16 {
     input.forEach {
       graph.parseNode(it)
     }
-    println(graph.maxScore2(graph.firstNode, 30, emptyList(), emptyList()))
+    println(graph.maxScore2(graph.firstNode, 30, emptySet(), emptySet()))
     // println("Result is $result")
   }
 
