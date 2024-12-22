@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# OPTIONS_GHC -Wno-x-partial #-}
 
 {-# HLINT ignore "Use second" #-}
 {-# HLINT ignore "Use list comprehension" #-}
 
-import Control.Applicative qualified as Map
 import Data.List qualified as L
 import Data.Map (Map)
 import Data.Map qualified as Map
@@ -26,118 +26,79 @@ main = do
 part1 :: [String] -> String
 part1 lines =
   let (pairs, numberLines) = parseInput lines
-      tagged = zipWith (\a b -> (a, isOrderCorrect pairs b)) numberLines numberLines
-      result = sum $ do
-        (nums, isOk) <- tagged
-        if isOk then return (nums !! (length nums `div` 2)) else []
-   in show result
-
-isOrderCorrect :: [(Int, Int)] -> [Int] -> Bool
-isOrderCorrect orderingPairs line =
-  let pairs = generatePairs line
-      isPairOk = checkPair orderingPairs <$> pairs
-   in and isPairOk
-
-checkPair :: [(Int, Int)] -> (Int, Int) -> Bool
-checkPair [] _ = False
-checkPair ((a, b) : ps) (x, y)
-  | a == x && b == y = True
-  | a == y && b == x = False
-  | otherwise = checkPair ps (x, y)
+      valids = do
+        toConsider <- numberLines
+        let validEdges = removeIngoredNodes pairs toConsider
+        let sorted = runTopSort validEdges
+        if isInSameOrder toConsider sorted then [midEl toConsider] else []
+   in show . sum $ valids
 
 part2 :: [String] -> String
-part2 _ =
-  let edges = [(47, 53), (97, 61), (97, 47), (75, 53), (61, 53), (97, 53), (75, 47), (97, 75), (47, 61), (75, 61)]
-   in show $ sortNodes edges
+part2 lines =
+  let (pairs, numberLines) = parseInput lines
+      valids = do
+        toConsider <- numberLines
+        let validEdges = removeIngoredNodes pairs toConsider
+        let sorted = runTopSort validEdges
+        if isInSameOrder toConsider sorted then [] else [midEl sorted]
+   in show . sum $ valids
 
--- part2 lines =
---   let (edges, numberLines) = parseInput lines
---       notOkLines = do
---         pageLine <- numberLines
---         let isInOrder = isOrderCorrect edges pageLine
---         if isInOrder then [] else [pageLine]
---       x = do
---         notOkLine <- notOkLines
---         let notOkSet = S.fromList $ traceShowId notOkLine
---         let edgesToConsider = filter (\(a, b) -> a `S.member` notOkSet && b `S.member` notOkSet) edges
---         let sorted = sortNodes edgesToConsider
---         -- let graph = traceShowId $ createInitialStep edgesToConsider
---         return sorted
---    in -- let edgesToConsider = filter (\(a, b) -> a `S.member` notOkSet && b `S.member` notOkSet) edges
---       -- let edgesToConsider2 = trace ("edges to consider " ++ show edgesToConsider) edgesToConsider
---       -- let graph = createInitialStep edgesToConsider2
---       -- let graph2 = trace ("Graph is " ++ show graph) graph
---       -- let sorted = runTopologicalSort graph2
---       -- return sorted
---       -- mids = do
---       --   p <- orderedNotOk
---       --   return (p !! (length p `div` 2))
---       --  in show $ sum mids
---       show x
+isInSameOrder :: (Eq a) => [a] -> [a] -> Bool
+isInSameOrder [] [] = True
+isInSameOrder (a : as) (b : bs) = a == b && isInSameOrder as bs
+isInSameOrder _ _ = False
 
-sortNodes :: [(Int, Int)] -> [Int]
-sortNodes edges =
-  let initialStep = traceShowId $ createInitialStep edges
-      sorted = runTopologicalSort initialStep
-   in trace "Sort nodes" sorted
+midEl :: [a] -> a
+midEl x = x !! (length x `div` 2)
 
-myTrace :: (Show a) => String -> a -> a
-myTrace prepend x = trace (prepend ++ " " ++ show x) x
+computeNodeIncomingDegrees :: [(Int, Int)] -> Map Int Int
+computeNodeIncomingDegrees edges =
+  let initialMap = foldl (\acc (from, to) -> Map.insert from 0 (Map.insert to (0 :: Int) acc)) Map.empty edges
+      incomingDegrees = foldl (\acc (from, to) -> Map.adjust (+ (1 :: Int)) to acc) initialMap edges
+   in incomingDegrees
 
-data TopologicalStep = TopologicalStep
+removeIngoredNodes :: [(Int, Int)] -> [Int] -> [(Int, Int)]
+removeIngoredNodes edges consideredNodes = do
+  (from, to) <- edges
+  if from `elem` consideredNodes && to `elem` consideredNodes
+    then [(from, to)]
+    else []
+
+data TopSortStep = TopSortStep
   { edges :: [(Int, Int)],
-    incomingDegree :: [(Int, Int)],
-    sorted :: [Int]
+    partialSort :: [Int],
+    incomingDegrees :: Map Int Int
   }
+  deriving (Show)
 
-instance Show TopologicalStep where
-  show (TopologicalStep e d s) = "Edges: " ++ show e ++ "\n" ++ "Degrees: " ++ show d ++ "\nSorted: " ++ show s
+runTopSort :: [(Int, Int)] -> [Int]
+runTopSort edx =
+  let degs = computeNodeIncomingDegrees edx
+      runUntilDone :: TopSortStep -> [Int]
+      runUntilDone crtStep =
+        case topSortStep crtStep of
+          Just nextStep -> runUntilDone nextStep
+          Nothing -> reverse $ partialSort crtStep
+   in runUntilDone (TopSortStep edx [] degs)
 
-createInitialStep :: [(Int, Int)] -> TopologicalStep
-createInitialStep edges =
-  let allNodes = Map.fromList $ map (,0 :: Int) (edges >>= (\(a, b) -> [a, b]))
-      degreesMap = foldl (\acc (from, to) -> Map.adjust (+ 1) to acc) allNodes edges
-   in TopologicalStep edges (Map.assocs degreesMap) []
+topSortStep :: TopSortStep -> Maybe TopSortStep
+topSortStep crtStep = do
+  nodeWithZero <- fmap fst $ maybeHead $ filter (\(node, degree) -> degree == 0) (Map.assocs $ incomingDegrees crtStep)
+  let (newEdges, nodesToDcrement) =
+        foldl
+          ( \(newEdges, nodesToDecrease) (from, to) ->
+              if from == nodeWithZero
+                then (newEdges, to : nodesToDecrease)
+                else ((from, to) : newEdges, nodesToDecrease)
+          )
+          ([], [])
+          (edges crtStep)
+  let newDegrees = foldl (flip (Map.adjust (\x -> x - 1))) (Map.delete nodeWithZero $ incomingDegrees crtStep) nodesToDcrement
+  return $ TopSortStep newEdges (nodeWithZero : partialSort crtStep) newDegrees
 
-runTopologicalSort :: TopologicalStep -> [Int]
-runTopologicalSort step =
-  let oneMoreTurn = topologicalSort step
-   in case oneMoreTurn of
-        Just nextTurn -> runTopologicalSort nextTurn
-        Nothing -> reverse . sorted $ step
-
-adjust :: (Eq k) => (v -> v) -> k -> [(k, v)] -> [(k, v)]
-adjust fn k = map (\(a, b) -> if a == k then (a, fn b) else (a, b))
-
-topologicalSort :: TopologicalStep -> Maybe TopologicalStep
-topologicalSort step = do
-  candidate <- findCandidateNode . incomingDegree $ step
-  let nodesPointedByCandidate = do
-        (from, to) <- edges step
-        if from == candidate then return to else []
-  let newDegrees = do
-        (node, degree) <- incomingDegree step
-        if node == candidate
-          then []
-          else
-            if node `elem` nodesPointedByCandidate && degree >= 0
-              then [(node, degree - 1)]
-              else [(node, degree)]
-  return step
-
-findCandidateNode :: [(Int, Int)] -> Maybe Int
-findCandidateNode incomingDegree =
-  fst <$> L.find ((0 ==) . snd) incomingDegree
-
-generatePairs :: [Int] -> [(Int, Int)]
-generatePairs [] = []
-generatePairs [_] = []
-generatePairs (x : xs) =
-  let tailPairs = generatePairs xs
-      headPairs = do
-        y <- xs
-        return (x, y)
-   in headPairs ++ tailPairs
+maybeHead :: [a] -> Maybe a
+maybeHead [] = Nothing
+maybeHead (x : _) = Just x
 
 type InputData = ([(Int, Int)], [[Int]])
 
@@ -155,12 +116,6 @@ parseInput (x : xs) =
   let (pairs, rows) = parseInput xs
       [a, b] = map ((read :: String -> Int) . unpack) $ splitOn "|" $ pack x
    in ((a, b) : pairs, rows)
-
--- parseInput ("" : xs) = parseRows xs
---   where
---     parseRows :: [String] -> InputData -> InputData
---     parseRows [] input = input
---     parseRows (x:xs) (pairs, rows) =
 
 readPart :: IO String
 readPart = do
