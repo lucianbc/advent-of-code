@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-x-partial -Wno-unrecognised-warning-flags #-}
+
 import System.Environment
 
 main = do
