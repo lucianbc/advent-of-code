@@ -1,6 +1,17 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# OPTIONS_GHC -Wno-x-partial -Wno-unrecognised-warning-flags #-}
 
-import Debug.Trace (traceShowId)
+{-# HLINT ignore "Use list comprehension" #-}
+{-# HLINT ignore "Use uncurry" #-}
+{-# HLINT ignore "Use zipWith" #-}
+
+import Data.Array.Base (UArray (UArray))
+import Data.Array.Unboxed qualified as A
+import Data.List qualified as L
+import Data.Maybe (listToMaybe)
+import Data.Set (Set)
+import Data.Set qualified as S
+import Debug.Trace (traceShow, traceShowId)
 import System.Environment
 
 main = do
@@ -14,117 +25,108 @@ main = do
 
 part1 :: [String] -> String
 part1 lines =
-  let initial = parseTable lines
-      allTables = generateTables initial
-      (Table endConfig) = last allTables
-      count = sum $ do
-        l <- endConfig
-        char <- l
-        case char of
-          Visited -> [1]
-          _ -> []
-   in show count
+  let (t, pos) = parseTable lines
+      path = walk t pos
+      pathLength = length . L.nub . map (\x -> (line x, col x)) $ path
+   in show pathLength
 
 part2 :: [String] -> String
-part2 lines = "todo"
+part2 lines =
+  let (t, pos) = parseTable lines
+      path = L.nub . map (\x -> (line x, col x)) $ walk t pos
+      leadingToLoops = do
+        (line, col) <- path
+        let newTable = t `put` [((line, col), '#')]
+        let newWalk = walk newTable pos
+        if detectCycle newWalk then [1] else []
+      indexes = map fst $ zip [1 ..] leadingToLoops
+   in --  in show indexes <- slow, so show progress. I only care of the last element,
+      --  which counts the number of configs that lead to a cycle
+      show . last $ indexes
 
-generateTables :: Table -> [Table]
-generateTables t =
-  case nextTable t of
-    Nothing -> [t]
-    Just next -> t : generateTables next
-
-nextTable :: Table -> Maybe Table
-nextTable table = do
-  (crtPos@(crtLine, crtCol), crtSlot) <- current table
-  let nextPos = case crtSlot of
-        Current Up -> (crtLine - 1, crtCol)
-        Current Down -> (crtLine + 1, crtCol)
-        Current DLeft -> (crtLine, crtCol - 1)
-        Current DRight -> (crtLine, crtCol + 1)
-  let nextTable
-        | isOutsideBounds nextPos table = put crtPos Visited table
-        | checkCanVisit nextPos table = put nextPos crtSlot . put crtPos Visited $ table
-        | otherwise = put crtPos (turn crtSlot) table
-  return nextTable
-
-turn (Current Up) = Current DRight
-turn (Current DRight) = Current Down
-turn (Current Down) = Current DLeft
-turn (Current DLeft) = Current Up
-
-isOutsideBounds (line, col) table
-  | line < 0 || col < 0 = True
-  | line >= height table || col >= width table = True
-  | otherwise = False
-
-checkCanVisit nextPos table = case elemAt table nextPos of
-  Obstacle -> False
-  _ -> True
-
-data Direction = Up | Down | DLeft | DRight
-
-data Slot = Empty | Visited | Current Direction | Obstacle
-
-newtype Table = Table [[Slot]]
-
-instance Show Table where
-  show (Table lines) = unlines (map (map (head . show)) lines)
-
-elemAt :: Table -> (Int, Int) -> Slot
-elemAt (Table ls) (line, col) = ls !! line !! col
-
-put :: (Int, Int) -> Slot -> Table -> Table
-put (line, col) slot (Table inTable) =
-  let (prevLines, myLine : tailLines) = splitAt line inTable
-      (prevSlots, _ : tailSlots) = splitAt col myLine
-      newLine = prevSlots ++ (slot : tailSlots)
-   in Table (prevLines ++ (newLine : tailLines))
-
-width :: Table -> Int
-width (Table (x : _)) = length x
-
-height :: Table -> Int
-height (Table x) = length x
-
-current :: Table -> Maybe ((Int, Int), Slot)
-current (Table ls) = currentInternal 0 ls
+detectCycle :: (Ord a) => [a] -> Bool
+detectCycle = detectCycleInternal S.empty
   where
-    findCurrentOnLine :: Int -> [Slot] -> Maybe (Int, Slot)
-    findCurrentOnLine _ [] = Nothing
-    findCurrentOnLine i (crtSlot@(Current _) : _) = Just (i, crtSlot)
-    findCurrentOnLine i (_ : xs) = findCurrentOnLine (i + 1) xs
-    currentInternal :: Int -> [[Slot]] -> Maybe ((Int, Int), Slot)
-    currentInternal _ [] = Nothing
-    currentInternal currentLineIndex (line : ls) = case findCurrentOnLine 0 line of
-      Just (i, crtSlot) -> Just ((currentLineIndex, i), crtSlot)
-      Nothing -> currentInternal (currentLineIndex + 1) ls
+    detectCycleInternal :: (Ord a) => Set a -> [a] -> Bool
+    detectCycleInternal _ [] = False
+    detectCycleInternal seenSoFar (x : xs) =
+      (x `S.member` seenSoFar) || detectCycleInternal (x `S.insert` seenSoFar) xs
 
-instance Show Direction where
-  show Up = "^"
-  show Down = "v"
-  show DLeft = "<"
-  show DRight = ">"
+data Table = Table
+  { width :: Int,
+    height :: Int,
+    table :: UArray (Int, Int) Char
+  }
+  deriving (Show)
 
-instance Show Slot where
-  show Empty = "."
-  show Visited = "X"
-  show (Current x) = show x
-  show Obstacle = "#"
+parseTable :: [String] -> (Table, Position)
+parseTable lines =
+  let w = length . head $ lines
+      h = length lines
+      charMap = do
+        (lineIndex, line) <- zip [0 :: Int ..] lines
+        (colIndex, char) <- zip [0 :: Int ..] line
+        return ((lineIndex, colIndex), char)
+      (markerPos, marker) = head $ do
+        (ix, char) <- charMap
+        if char `elem` "<>^v" then [(ix, char)] else []
+      charMap2 = do
+        (ix, char) <- charMap
+        return $ if ix == markerPos then (ix, '.') else (ix, char)
+      table = Table w h (A.array ((0, 0), (w - 1, h - 1)) charMap2 :: UArray (Int, Int) Char)
+      position = Position (fst markerPos) (snd markerPos) marker
+   in (table, position)
 
-parseTable :: [String] -> Table
-parseTable = Table . map (map readSlot)
+printTable :: Table -> String
+printTable t = unlines [[table t A.! (r, c) | c <- [0 .. width t - 1]] | r <- [0 .. height t - 1]]
 
-readSlot :: Char -> Slot
-readSlot x = case x of
-  '.' -> Empty
-  'X' -> Visited
-  '#' -> Obstacle
-  '^' -> Current Up
-  'v' -> Current Down
-  '<' -> Current DLeft
-  '>' -> Current DRight
-  _ -> error ("Char " ++ show x ++ " not matched")
+data Position = Position
+  { line :: Int,
+    col :: Int,
+    orientation :: Char
+  }
+  deriving (Show, Eq, Ord)
+
+nextPosition :: Table -> Position -> Maybe Position
+nextPosition t crt =
+  let nextPos = case orientation crt of
+        '^' -> (line crt - 1, col crt)
+        '>' -> (line crt, col crt + 1)
+        'v' -> (line crt + 1, col crt)
+        '<' -> (line crt, col crt - 1)
+      nextChar = t `at` nextPos
+   in if isInBounds t nextPos
+        then
+          if isBlocked nextChar
+            then Just $ Position (line crt) (col crt) (turn . orientation $ crt)
+            else Just $ Position (fst nextPos) (snd nextPos) (orientation crt)
+        else Nothing
+
+walk :: Table -> Position -> [Position]
+walk table crtPos =
+  let nextPos = nextPosition table crtPos
+   in case nextPos of
+        Just next -> crtPos : walk table next
+        Nothing -> [crtPos]
+
+isBlocked = (== '#')
+
+turn '^' = '>'
+turn '>' = 'v'
+turn 'v' = '<'
+turn '<' = '^'
+
+isInBounds :: Table -> (Int, Int) -> Bool
+isInBounds t (l, c)
+  | l < 0 || c < 0 = False
+  | l >= height t || c >= width t = False
+  | otherwise = True
+
+put :: Table -> [((Int, Int), Char)] -> Table
+put t updates = Table (width t) (height t) (table t A.// updates)
+
+at :: Table -> (Int, Int) -> Char
+at t ix = table t A.! ix
 
 readPart :: IO String
 readPart = do
